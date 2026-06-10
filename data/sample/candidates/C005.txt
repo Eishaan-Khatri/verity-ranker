@@ -1,0 +1,6 @@
+Candidate ID: C005
+Name: Blair Stone
+
+Candidate profile with several impressive technical keywords but limited implementation detail. The profile says they are interested in applied ML systems and have explored modern AI tooling in coursework and online demos.
+
+Skills: Python, machine learning, model evaluation, FastAPI, Docker, embeddings, retrieval, production engineering, testing

@@ -21,11 +21,13 @@ class V1PipelineTest(unittest.TestCase):
                 output_path=output,
                 report_path=report,
                 weights_path=ROOT / "configs" / "scoring_weights.json",
+                evidence_path=Path(tmp) / "evidence_ledger.json",
+                claim_report_path=Path(tmp) / "claim_verification_report.json",
             )
-            self.assertEqual(result.candidate_count, 4)
+            self.assertEqual(result.candidate_count, 5)
             self.assertTrue(output.exists())
             payload = json.loads(report.read_text(encoding="utf-8"))
-            self.assertEqual(payload["version"], "v1_basic_ranker")
+            self.assertEqual(payload["version"], "v2_verified_ranker")
             self.assertEqual(payload["ranked_candidates"][0]["candidate_id"], "C001")
 
 

@@ -21,8 +21,12 @@ class CandidateProfile:
     candidate_id: str
     name: str
     raw_text: str
+    declared_skills: list[str]
+    body_skills: list[str]
+    negated_skills: list[str]
     skills: list[str]
     evidence_snippets: dict[str, list[str]]
+    negated_snippets: dict[str, list[str]]
     seniority_signal: float
     achievement_signal: float
 
@@ -48,19 +52,36 @@ def parse_candidate(path: Path) -> CandidateProfile:
     )
 
     skills = set()
+    declared_skills = set()
     skills_line = _field(text, "Skills")
     if skills_line:
-        skills.update(extract_skills(skills_line))
+        declared_skills.update(extract_skills(skills_line))
+        skills.update(declared_skills)
 
     positive_sentences = [sentence for sentence in split_sentences(body_text) if not _is_negated_sentence(sentence)]
+    negative_sentences = [sentence for sentence in split_sentences(body_text) if _is_negated_sentence(sentence)]
+    body_skills = set()
+    negated_skills = set()
+
     for sentence in positive_sentences:
-        skills.update(extract_skills(sentence))
+        sentence_skills = extract_skills(sentence)
+        body_skills.update(sentence_skills)
+        skills.update(sentence_skills)
 
     snippets: dict[str, list[str]] = {skill: [] for skill in sorted(skills)}
     for sentence in positive_sentences:
         sentence_skills = extract_skills(sentence)
         for skill in sentence_skills:
             snippets.setdefault(skill, []).append(sentence)
+
+    negated_snippets: dict[str, list[str]] = {}
+    for sentence in negative_sentences:
+        sentence_skills = extract_skills(sentence)
+        negated_skills.update(sentence_skills)
+        for skill in sentence_skills:
+            negated_snippets.setdefault(skill, []).append(sentence)
+
+    skills -= negated_skills
 
     lowered = text.lower()
     seniority_signal = 1.0 if any(term in lowered for term in ["lead", "senior", "3 years", "4 years", "5 years"]) else 0.45
@@ -70,8 +91,12 @@ def parse_candidate(path: Path) -> CandidateProfile:
         candidate_id=candidate_id,
         name=name,
         raw_text=text,
+        declared_skills=sorted(declared_skills),
+        body_skills=sorted(body_skills),
+        negated_skills=sorted(negated_skills),
         skills=sorted(skills),
         evidence_snippets=snippets,
+        negated_snippets=negated_snippets,
         seniority_signal=seniority_signal,
         achievement_signal=achievement_signal,
     )

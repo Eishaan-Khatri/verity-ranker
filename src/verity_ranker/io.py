@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .jd import RoleProfile
 from .scoring import CandidateScore
+from .verification import ClaimVerification, EvidenceLedgerEntry
 
 
 CSV_COLUMNS = [
@@ -44,10 +45,10 @@ def write_ranked_output(path: Path, scores: list[CandidateScore]) -> None:
 def write_audit_report(path: Path, role: RoleProfile, scores: list[CandidateScore]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     report = {
-        "version": "v1_basic_ranker",
+        "version": "v2_verified_ranker",
         "limitations": [
-            "No GitHub proof-of-work verification.",
-            "No evidence ledger with stable evidence IDs.",
+            "Claim verification is rule-based and uses resume/project text available to the pipeline.",
+            "External GitHub API verification is not implemented in this local V2 branch yet.",
             "No fairness or rank-stability audit.",
             "No listwise reranking.",
         ],
@@ -56,3 +57,12 @@ def write_audit_report(path: Path, role: RoleProfile, scores: list[CandidateScor
     }
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
 
+
+def write_evidence_ledger(path: Path, ledger: list[EvidenceLedgerEntry]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([asdict(entry) for entry in ledger], indent=2), encoding="utf-8")
+
+
+def write_claim_verification_report(path: Path, verifications: list[ClaimVerification]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps([asdict(item) for item in verifications], indent=2), encoding="utf-8")
