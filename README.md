@@ -24,6 +24,25 @@ python run_v1.py run --jd data/sample/jd.txt --candidates data/sample/candidates
 python run_v1.py validate --file outputs/final/ranked_output.csv
 ```
 
+## Web Demo
+
+V1 includes a Streamlit app because GitHub Pages cannot run the Python ranker server-side. Streamlit Community Cloud can deploy this repository from GitHub and run the existing Python pipeline.
+
+Run locally:
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+The app can:
+
+- run the included sample JD and candidate files
+- accept uploaded `.txt` or `.md` candidate profiles
+- display ranked output
+- download `ranked_output.csv`
+- download `audit_report.json`
+
 ## Current Scope
 
 Included:
@@ -48,4 +67,3 @@ Not included:
 - rank stability audit
 
 These are intentionally left for later versions.
-
