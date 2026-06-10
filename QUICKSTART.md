@@ -3,13 +3,13 @@
 ## 1. Run The Sample Pipeline
 
 ```bash
-python run_v1.py run --jd data/sample/jd.txt --candidates data/sample/candidates --output outputs/final/ranked_output.csv --report outputs/final/audit_report.json
+python run_v2.py run --jd data/sample/jd.txt --candidates data/sample/candidates --output outputs/final/ranked_output.csv --report outputs/final/audit_report.json
 ```
 
 ## 2. Validate The Output
 
 ```bash
-python run_v1.py validate --file outputs/final/ranked_output.csv
+python run_v2.py validate --file outputs/final/ranked_output.csv
 ```
 
 ## 3. Run Tests
@@ -41,6 +41,8 @@ GitHub Pages is not used because it only serves static HTML/CSS/JavaScript and c
 
 - `outputs/final/ranked_output.csv`
 - `outputs/final/audit_report.json`
+- `outputs/final/evidence_ledger.json`
+- `outputs/final/claim_verification_report.json`
 
 Generated outputs are intentionally ignored by Git. Regenerate them locally with the sample command above.
 

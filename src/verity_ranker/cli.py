@@ -14,6 +14,8 @@ def main() -> None:
     run_parser.add_argument("--candidates", required=True)
     run_parser.add_argument("--output", required=True)
     run_parser.add_argument("--report", required=True)
+    run_parser.add_argument("--evidence", default="outputs/final/evidence_ledger.json")
+    run_parser.add_argument("--claims", default="outputs/final/claim_verification_report.json")
     run_parser.add_argument("--weights", default="configs/scoring_weights.json")
 
     validate_parser = subparsers.add_parser("validate")
@@ -28,12 +30,15 @@ def main() -> None:
             output_path=Path(args.output),
             report_path=Path(args.report),
             weights_path=Path(args.weights),
+            evidence_path=Path(args.evidence),
+            claim_report_path=Path(args.claims),
         )
         print(f"ranked_output={result.output_path}")
         print(f"audit_report={result.report_path}")
+        print(f"evidence_ledger={result.evidence_path}")
+        print(f"claim_verification_report={result.claim_report_path}")
         print(f"candidates_ranked={result.candidate_count}")
 
     if args.command == "validate":
         validate_ranked_output(Path(args.file))
         print(f"valid_output={args.file}")
-
