@@ -1,0 +1,22 @@
+# Model configuration for ai-hiring-ranker v2
+# Swap providers here without touching pipeline code.
+
+llm:
+  provider: "openai"          # options: openai | anthropic | local
+  model: "gpt-4o-mini"        # cost-efficient default; swap to gpt-4o for higher quality
+  temperature: 0.0            # deterministic outputs for scoring agents
+  max_tokens: 4096
+
+embeddings:
+  provider: "openai"
+  model: "text-embedding-3-small"
+  dimensions: 1536
+
+# Gemini kept here for reference — disabled due to rate limits
+# llm:
+#   provider: "google"
+#   model: "gemini-2.5-flash"
+
+hyde:
+  num_profiles: 3             # minimum / strong / exceptional
+  temperature: 0.7            # slightly creative for HyDE generation

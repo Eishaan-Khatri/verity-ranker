@@ -1,0 +1,25 @@
+{
+  "title": "RankedOutput",
+  "description": "Final ranked list of candidates produced by the pipeline.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["rank", "candidate_id", "candidate_name", "final_score"],
+    "properties": {
+      "rank": { "type": "integer", "minimum": 1 },
+      "candidate_id": { "type": "string" },
+      "candidate_name": { "type": "string" },
+      "final_score": { "type": "number", "minimum": 0, "maximum": 100 },
+      "skill_fit": { "type": "number" },
+      "experience_depth": { "type": "number" },
+      "seniority_match": { "type": "number" },
+      "domain_match": { "type": "number" },
+      "career_growth": { "type": "number" },
+      "proof_strength": { "type": "number" },
+      "verified_claims": { "type": "integer" },
+      "unverified_claims": { "type": "integer" },
+      "strengths": { "type": "array", "items": { "type": "string" } },
+      "risks": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

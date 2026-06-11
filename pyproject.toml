@@ -1,11 +1,29 @@
 [project]
-name = "verity-ranker"
-version = "0.1.0"
-description = "V1 baseline for evidence-aware candidate ranking"
+name = "ai-hiring-ranker"
+version = "0.2.0"
+description = "Intelligent, evidence-aware candidate ranking system"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "pydantic>=2.0,<3.0",
+    "pypdf>=4.0",
+    "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+llm = [
+    "langchain-core>=0.2",
+    # "google-generativeai>=0.5",
+]
+retrieval = [
+    "faiss-cpu>=1.7",
+    "rank-bm25>=0.2",
+]
+nlp = ["spacy>=3.7"]
+dev = ["pytest>=8.0", "streamlit>=1.35"]
 
 [project.scripts]
+ai-hiring-ranker = "ai_hiring_ranker.cli:main"
+# legacy v1 entry point kept for backward compatibility
 verity-ranker = "verity_ranker.cli:main"
 
 [build-system]

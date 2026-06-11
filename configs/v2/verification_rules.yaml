@@ -1,0 +1,31 @@
+# Rules for the Resume Claim Verification Agent (Layer 5)
+
+github:
+  # What to look for when verifying a claimed skill via GitHub
+  check_commits: true
+  check_file_types: true       # e.g. .py, Dockerfile, requirements.txt
+  check_readme: true
+  check_tests: true
+  recency_cutoff_years: 3      # commits older than this are "weak"
+
+verification_labels:
+  verified:
+    description: "Direct code/commit evidence found; recent and relevant."
+    min_confidence: 0.75
+  weak:
+    description: "Evidence exists but is indirect, old, or low volume."
+    min_confidence: 0.40
+  inferred:
+    description: "Skill inferred from adjacent evidence (e.g., uses FastAPI → knows Python)."
+    min_confidence: 0.20
+  unsupported:
+    description: "No evidence found for the claim."
+    min_confidence: 0.0
+
+proxy_bias_flags:
+  # Fields that should NOT influence scoring — used by the Fairness Audit
+  - university_name
+  - location
+  - graduation_year
+  - name
+  - gender_signal

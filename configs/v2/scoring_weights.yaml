@@ -1,0 +1,9 @@
+# Rubric-based scoring weights for Layer 10
+# All weights must sum to 1.0
+
+skill_fit: 0.30           # Matched required + preferred skills
+experience_depth: 0.20    # Years + evidence-backed depth
+seniority_match: 0.15     # Seniority signal vs. JD level
+domain_match: 0.15        # Industry / domain alignment
+career_growth: 0.10       # Trajectory and progression signal
+proof_strength: 0.10      # Verified vs. unverified claims ratio

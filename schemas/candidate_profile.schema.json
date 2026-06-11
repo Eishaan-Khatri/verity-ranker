@@ -1,0 +1,26 @@
+{
+  "title": "CandidateInput",
+  "description": "Validated candidate resume as it enters the pipeline after ingestion.",
+  "type": "object",
+  "required": ["candidate_id", "raw_text", "file_format", "ingested_at"],
+  "properties": {
+    "candidate_id": { "type": "string", "minLength": 1 },
+    "source_path": { "type": ["string", "null"] },
+    "file_format": { "type": "string", "enum": ["txt", "md", "pdf", "docx", "unknown"] },
+    "raw_text": { "type": "string", "minLength": 20 },
+    "char_count": { "type": "integer", "minimum": 0 },
+    "word_count": { "type": "integer", "minimum": 0 },
+    "portfolio_links": {
+      "type": "object",
+      "properties": {
+        "github": { "type": ["string", "null"] },
+        "kaggle": { "type": ["string", "null"] },
+        "linkedin": { "type": ["string", "null"] },
+        "portfolio": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "ingested_at": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

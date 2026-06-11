@@ -1,0 +1,28 @@
+{
+  "title": "EvidenceLedger",
+  "description": "Auditable record of every claim extracted from a candidate resume with its verification status.",
+  "type": "object",
+  "required": ["candidate_id", "claims"],
+  "properties": {
+    "candidate_id": { "type": "string" },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim_id", "skill", "claim_text", "source", "verification_status"],
+        "properties": {
+          "claim_id": { "type": "string" },
+          "skill": { "type": "string" },
+          "claim_text": { "type": "string" },
+          "source": { "type": "string", "enum": ["resume", "github", "kaggle", "portfolio", "inferred"] },
+          "verification_status": { "type": "string", "enum": ["verified", "weak", "inferred", "unsupported", "pending"] },
+          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+          "evidence_url": { "type": ["string", "null"] },
+          "recency_years": { "type": ["number", "null"] },
+          "notes": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
