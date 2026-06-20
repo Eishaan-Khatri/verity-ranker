@@ -47,6 +47,10 @@ def build_reasoning(
         parts.append(f"covers required skills {', '.join(matched[:5])}")
     if partial:
         parts.append(f"adjacent experience in {', '.join(partial[:3])}")
+
+    strengths = _clean(features.get("strengths", []))
+    if strengths and rank <= 40:
+        parts.append(strengths[0].rstrip("."))
     if years is not None:
         parts.append(f"{years:.0f} years experience as {title}")
     elif title:

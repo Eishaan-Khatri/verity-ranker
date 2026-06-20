@@ -25,6 +25,8 @@ ai_tools_declared:
 
 architecture_notes:
   - "Two-script design: precompute.py (heavy, once) + rank.py (sandbox, offline)"
+  - "Precompute runs layers 2-3 globally plus layers 4/6/7/9/10 per candidate (rule-based)"
   - "No live GitHub crawling — github_activity_score used as proof feature"
   - "Honeypot and keyword-stuffer guards down-rank suspicious profiles"
   - "Engagement signals (last_active_date, recruiter_response_rate) applied as multipliers"
+  - "rank.py applies offline listwise re-rank then CSV tie-break by candidate_id ascending"

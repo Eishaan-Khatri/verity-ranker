@@ -1,4 +1,23 @@
-# Verity Ranker V1
+# Verity Ranker
+
+Evidence-backed candidate ranking with a 15-layer V2 pipeline and a **hackathon two-script split** for sandbox submission.
+
+## Hackathon submission (start here)
+
+See **[HACKATHON.md](HACKATHON.md)** for the full guide. Quick run:
+
+```bash
+pip install -r requirements.txt
+python precompute.py --jd data/hackathon/jd.txt --candidates data/hackathon/candidates.jsonl --cache-dir cache --force-fallback
+python rank.py --jd data/hackathon/jd.txt --candidates data/hackathon/candidates.jsonl --cache-dir cache --output submission/ranked_output.csv
+```
+
+- `precompute.py` — runs heavy intelligence once (optional LLM for JD), writes cache
+- `rank.py` — **offline**, no GPU, no network; loads cache and outputs top-100 CSV
+
+---
+
+## Verity Ranker V1
 
 V1 is the minimum working candidate ranking pipeline.
 

@@ -22,24 +22,56 @@ def load_feature_cache(path: Path | str) -> list[dict[str, Any]]:
     return rows
 
 
+def _score_value(row: dict[str, Any]) -> float:
+    return float(row.get("final_score", row.get("base_score", 0.0)))
+
+
+def _listwise_sort_key(row: dict[str, Any]) -> tuple:
+    """
+    Rule-based listwise tie-break (Layer 11 offline).
+
+    Uses full-precision score plus cached dimensions to compare candidates.
+    """
+    dims = row.get("dimensions") or {}
+    return (
+        -_score_value(row),
+        -float(dims.get("proof_strength", 0.0)),
+        -float(dims.get("skill_fit", 0.0)),
+        -float(dims.get("seniority_match", 0.0)),
+        -float(dims.get("career_growth", 0.0)),
+        -float(dims.get("experience_depth", 0.0)),
+        -float(row.get("github_activity_score", 0.0)),
+        str(row.get("candidate_id", "")),
+    )
+
+
+def _submission_sort_key(row: dict[str, Any]) -> tuple:
+    """Final ordering for CSV: rounded score desc, candidate_id asc on ties."""
+    return (-round(_score_value(row), 2), str(row.get("candidate_id", "")))
+
+
 def rank_candidates(
     features: Iterable[dict[str, Any]],
     *,
     job_title: str,
     top_k: int = 100,
+    listwise_pool: int = 300,
 ) -> list[SubmissionRow]:
     """
-    Sort candidates by base_score descending, tie-break candidate_id ascending.
-    Return exactly top_k submission rows with reasoning.
+    Sort candidates and return exactly ``top_k`` submission rows.
+
+    1. Listwise re-rank a shortlist pool (Layer 11, offline rules).
+    2. Re-order by displayed score + candidate_id tie-break for validator compliance.
+    3. Assign ranks 1..top_k with fact-grounded reasoning.
     """
-    ranked = sorted(
-        list(features),
-        key=lambda row: (-float(row.get("base_score", 0.0)), str(row.get("candidate_id", ""))),
-    )[:top_k]
+    all_rows = list(features)
+    pool_size = max(top_k, listwise_pool)
+    pool = sorted(all_rows, key=_listwise_sort_key)[:pool_size]
+    ranked = sorted(pool[:top_k], key=_submission_sort_key)
 
     output: list[SubmissionRow] = []
     for idx, row in enumerate(ranked, start=1):
-        score = round(float(row.get("base_score", 0.0)), 2)
+        score = round(_score_value(row), 2)
         output.append(
             SubmissionRow(
                 candidate_id=str(row["candidate_id"]),
@@ -48,11 +80,6 @@ def rank_candidates(
                 reasoning=build_reasoning(row, job_title, idx),
             )
         )
-
-    # Enforce non-increasing scores after tie-break ordering
-    for i in range(1, len(output)):
-        if output[i].score > output[i - 1].score:
-            output[i].score = output[i - 1].score
 
     return output
 

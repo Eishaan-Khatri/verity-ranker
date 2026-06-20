@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class PrecomputeManifest(BaseModel):
     """Metadata written by precompute.py."""
 
-    version: str = "1.0"
+    version: str = "1.1"
     created_at: datetime = Field(default_factory=datetime.utcnow)
     jd_path: str = ""
     candidates_path: str = ""
@@ -21,6 +21,9 @@ class PrecomputeManifest(BaseModel):
     job_title: str = ""
     cache_file: str = "candidate_features.jsonl"
     jd_cache_file: str = "jd_profile.json"
+    hyde_cache_file: str = "hyde_profiles.json"
+    layers_precomputed: list[str] = Field(default_factory=list)
+    elapsed_seconds: float = 0.0
 
 
 class SubmissionRow(BaseModel):

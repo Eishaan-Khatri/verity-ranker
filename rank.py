@@ -14,7 +14,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 import time
@@ -22,17 +21,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT))
 
-from ai_hiring_ranker.hackathon.dataset import iter_candidates  # noqa: E402
-from ai_hiring_ranker.hackathon.features import build_features  # noqa: E402
 from ai_hiring_ranker.hackathon.ranker import (  # noqa: E402
     load_feature_cache,
     rank_candidates,
     write_submission_csv,
 )
-from ai_hiring_ranker.ingestion.schemas import JDInput  # noqa: E402
-from ai_hiring_ranker.jd_intelligence.agent import analyse_jd  # noqa: E402
 from ai_hiring_ranker.jd_intelligence.schemas import HiringProfile  # noqa: E402
+from scripts.validate_submission import validate_submission  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -42,21 +39,11 @@ def _load_hiring_profile(jd_path: Path, cache_dir: Path) -> HiringProfile:
     if jd_cache.exists():
         return HiringProfile.model_validate_json(jd_cache.read_text(encoding="utf-8"))
 
-    jd_text = jd_path.read_text(encoding="utf-8")
-    jd_input = JDInput(raw_text=jd_text, source_path=str(jd_path))
-    return analyse_jd(jd_input, force_fallback=True)
-
-
-def _build_features_offline(
-    candidates_path: Path,
-    hiring_profile: HiringProfile,
-) -> list[dict]:
-    rows: list[dict] = []
-    for line_no, record in iter_candidates(candidates_path):
-        rows.append(
-            build_features(record, hiring_profile, line_no=line_no, force_fallback=True)
-        )
-    return rows
+    raise FileNotFoundError(
+        f"Missing {jd_cache}. Run precompute.py first:\n"
+        f"  python precompute.py --jd {jd_path} --candidates <candidates.jsonl> "
+        f"--cache-dir {cache_dir}"
+    )
 
 
 def run_rank(
@@ -66,22 +53,29 @@ def run_rank(
     output_path: Path,
     *,
     top_k: int = 100,
+    skip_validate: bool = False,
 ) -> Path:
     t0 = time.perf_counter()
     hiring_profile = _load_hiring_profile(jd_path, cache_dir)
 
     feature_cache = cache_dir / "candidate_features.jsonl"
-    if feature_cache.exists():
-        logger.info("Loading precomputed cache: %s", feature_cache)
-        features = load_feature_cache(feature_cache)
-    else:
-        logger.warning(
-            "Cache missing — building features inline (slow). Run precompute.py first."
+    if not feature_cache.exists():
+        raise FileNotFoundError(
+            f"Missing {feature_cache}. Run precompute.py first on {candidates_path}."
         )
-        features = _build_features_offline(candidates_path, hiring_profile)
+
+    logger.info("Loading precomputed cache: %s", feature_cache)
+    features = load_feature_cache(feature_cache)
+    if not features:
+        raise ValueError(f"Feature cache is empty: {feature_cache}")
 
     rows = rank_candidates(features, job_title=hiring_profile.job_title, top_k=top_k)
     out = write_submission_csv(rows, output_path)
+
+    if not skip_validate:
+        errors = validate_submission(out)
+        if errors:
+            raise ValueError("Submission validation failed:\n" + "\n".join(f"  - {e}" for e in errors))
 
     elapsed = time.perf_counter() - t0
     logger.info(
@@ -101,6 +95,7 @@ def main() -> None:
     parser.add_argument("--cache-dir", default=Path("cache"), type=Path)
     parser.add_argument("--output", default=Path("submission/ranked_output.csv"), type=Path)
     parser.add_argument("--top-k", type=int, default=100)
+    parser.add_argument("--skip-validate", action="store_true")
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
 
@@ -115,6 +110,7 @@ def main() -> None:
         cache_dir=args.cache_dir,
         output_path=args.output,
         top_k=args.top_k,
+        skip_validate=args.skip_validate,
     )
 
 

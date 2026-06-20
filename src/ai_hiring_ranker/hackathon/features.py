@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Optional
 
-from ..agents.jd_fit_agent import _skill_coverage
-from ..agents.trajectory_agent import (
-    _career_growth_score,
-    _experience_depth_score,
-    _seniority_match_score,
-)
+from ..agents.orchestrator import evaluate_candidate
 from ..candidate_extraction.extractor import extract_candidate_profile
+from ..candidate_extraction.schemas import SkillClaim, SkillConfidence
 from ..ingestion.schemas import CandidateInput
 from ..jd_intelligence.schemas import HiringProfile
+from ..retrieval.graph_retriever import get_matched_skills
+from ..scoring.scorer import get_scoring_weights, score_one
 from .dataset import (
     candidate_id as cid_from_record,
     days_since_active,
@@ -24,9 +23,39 @@ from .dataset import (
     skills_list,
     years_experience,
 )
+from .evidence import build_hackathon_ledger
 from .guards import honeypot_risk, keyword_stuffer_risk
 
 logger = logging.getLogger(__name__)
+
+
+def _keyword_match_score(profile_text: str, hiring_profile: HiringProfile) -> float:
+    """Lightweight BM25-style keyword overlap (single candidate, no corpus index)."""
+    if not profile_text:
+        return 0.0
+    lowered = profile_text.lower()
+    terms = (
+        hiring_profile.all_required_skill_names
+        + hiring_profile.all_preferred_skill_names
+        + hiring_profile.key_responsibilities[:5]
+    )
+    if not terms:
+        return 0.0
+
+    hits = 0.0
+    for term in terms:
+        token = term.lower().strip()
+        if not token:
+            continue
+        if token in lowered:
+            hits += 1.0
+            continue
+        for piece in re.findall(r"[a-z0-9+#/.-]+", token):
+            if len(piece) > 2 and piece in lowered:
+                hits += 0.5
+                break
+
+    return round(min(1.0, hits / max(len(terms), 1)), 4)
 
 
 def engagement_multiplier(
@@ -59,9 +88,9 @@ def build_features(
     force_fallback: bool = True,
 ) -> dict[str, Any]:
     """
-    Build compact offline features for one candidate.
+    Build compact offline features for one candidate using V2 layers 4–10.
 
-    No GitHub API calls — uses github_activity_score from the dataset only.
+    No GitHub API calls — uses ``github_activity_score`` from the dataset only.
     """
     cid = cid_from_record(record, line_no)
     text = resume_text(record)
@@ -78,9 +107,7 @@ def build_features(
     )
     profile = extract_candidate_profile(candidate_input, force_fallback=force_fallback)
 
-    if listed_skills and len(profile.skills) < len(listed_skills):
-        from ..candidate_extraction.schemas import SkillClaim, SkillConfidence
-
+    if listed_skills:
         existing = {s.skill.lower() for s in profile.skills}
         for skill in listed_skills:
             norm = skill.strip().title()
@@ -89,67 +116,79 @@ def build_features(
                     SkillClaim(skill=norm, confidence=SkillConfidence.EXPLICIT, evidence_snippets=[])
                 )
 
-    req_cov, req_exact, req_partial = _skill_coverage(
-        profile.skill_names,
-        hiring_profile.all_required_skill_names,
+    ledger = build_hackathon_ledger(
+        profile,
+        github_activity_score=gh_score,
+        run_id="precompute",
     )
-    pref_cov, pref_exact, pref_partial = _skill_coverage(
-        profile.skill_names,
-        hiring_profile.all_preferred_skill_names,
-        min_weight=0.50,
+    eval_result = evaluate_candidate(
+        profile,
+        hiring_profile,
+        ledger,
+        force_fallback=True,
+    )
+    candidate_score = score_one(
+        eval_result,
+        get_scoring_weights(),
+        hiring_profile,
+        ledger,
     )
 
-    skill_fit = round(0.70 * req_cov + 0.30 * pref_cov, 4)
-    experience_depth = round(_experience_depth_score(profile, hiring_profile), 4)
-    seniority_match = round(_seniority_match_score(profile, hiring_profile), 4)
-    career_growth = round(_career_growth_score(profile), 4)
-    proof_strength = round(0.55 * gh_score + 0.45 * min(1.0, profile.production_signal + 0.15), 4)
-
-    domain_match = 0.5
-    if hiring_profile.domain:
-        blob = " ".join(
-            [title]
-            + [r.title for r in profile.career_timeline]
-            + [p.description for p in profile.projects]
-        ).lower()
-        domain_match = 0.8 if hiring_profile.domain.lower() in blob else 0.35
+    matched_req, matched_pref, graph_expanded = get_matched_skills(profile, hiring_profile)
+    keyword_score = _keyword_match_score(text, hiring_profile)
 
     honeypot, honeypot_flags = honeypot_risk(record)
     stuffer, stuffer_flags = keyword_stuffer_risk(record, hiring_profile.job_title)
     engagement = engagement_multiplier(inactive_days, response_rate)
 
-    weights = {
-        "skill_fit": 0.30,
-        "experience_depth": 0.20,
-        "seniority_match": 0.15,
-        "domain_match": 0.15,
-        "career_growth": 0.10,
-        "proof_strength": 0.10,
-    }
     dims = {
-        "skill_fit": skill_fit,
-        "experience_depth": experience_depth,
-        "seniority_match": seniority_match,
-        "domain_match": domain_match,
-        "career_growth": career_growth,
-        "proof_strength": proof_strength,
+        "skill_fit": candidate_score.skill_fit,
+        "experience_depth": candidate_score.experience_depth,
+        "seniority_match": candidate_score.seniority_match,
+        "domain_match": candidate_score.domain_match,
+        "career_growth": candidate_score.career_growth,
+        "proof_strength": candidate_score.proof_strength,
     }
-    base = sum(dims[k] * weights[k] for k in weights) * 100.0
+
+    final_score = float(candidate_score.final_score)
+    retrieval_blend = round(0.85 * (final_score / 100.0) + 0.15 * keyword_score, 4)
+    final_score = round(retrieval_blend * 100.0, 4)
 
     if honeypot >= 0.45:
-        base *= 0.35
+        final_score *= 0.35
     elif honeypot >= 0.25:
-        base *= 0.60
+        final_score *= 0.60
     if stuffer >= 0.35:
-        base *= 0.70
+        final_score *= 0.70
     elif stuffer >= 0.20:
-        base *= 0.85
-    base *= engagement
+        final_score *= 0.85
+    final_score *= engagement
+    final_score = round(max(0.0, min(100.0, final_score)), 4)
 
     missing_required = [
-        s for s in hiring_profile.all_required_skill_names
-        if s not in req_exact and s not in req_partial
+        s
+        for s in hiring_profile.all_required_skill_names
+        if s not in matched_req and s not in graph_expanded
     ]
+
+    strengths = _clean([
+        eval_result.strengths[0] if eval_result.strengths else "",
+        f"Matches required skills: {', '.join(matched_req[:4])}" if matched_req else "",
+        f"Graph-adjacent skills: {', '.join(graph_expanded[:3])}" if graph_expanded else "",
+        f"GitHub activity score {gh_score:.2f}" if gh_score >= 0.5 else "",
+        (
+            f"{years or profile.total_years_experience or 0:.0f} years experience"
+            if (years or profile.total_years_experience)
+            else ""
+        ),
+    ])
+    risks = _clean([
+        eval_result.risks[0] if eval_result.risks else "",
+        f"Missing required: {', '.join(missing_required[:3])}" if missing_required else "",
+        honeypot_flags[0] if honeypot_flags else "",
+        stuffer_flags[0] if stuffer_flags else "",
+        "Low platform engagement" if engagement < 0.85 else "",
+    ])
 
     return {
         "candidate_id": cid,
@@ -164,28 +203,21 @@ def build_features(
         "stuffer_risk": round(stuffer, 4),
         "honeypot_flags": honeypot_flags,
         "stuffer_flags": stuffer_flags,
-        "matched_required": req_exact[:12],
-        "matched_preferred": pref_exact[:8],
-        "partial_matches": req_partial[:8],
+        "keyword_score": keyword_score,
+        "matched_required": matched_req[:12],
+        "matched_preferred": matched_pref[:8],
+        "partial_matches": graph_expanded[:8],
         "missing_required": missing_required[:8],
-        "verified_skills": [
-            s.skill for s in profile.skills if s.confidence.value == "explicit"
-        ][:12],
-        "strengths": [
-            f"Matches required skills: {', '.join(req_exact[:4])}" if req_exact else "",
-            f"GitHub activity score {gh_score:.2f}" if gh_score >= 0.5 else "",
-            (
-                f"{years or profile.total_years_experience or 0:.0f} years experience"
-                if (years or profile.total_years_experience)
-                else ""
-            ),
-        ],
-        "risks": [
-            f"Missing required: {', '.join(missing_required[:3])}" if missing_required else "",
-            honeypot_flags[0] if honeypot_flags else "",
-            stuffer_flags[0] if stuffer_flags else "",
-            "Low platform engagement" if engagement < 0.85 else "",
-        ],
+        "verified_skills": [s.skill for s in profile.skills if s.confidence.value == "explicit"][:12],
+        "strengths": strengths,
+        "risks": risks,
         "dimensions": dims,
-        "base_score": round(max(0.0, min(100.0, base)), 4),
+        "base_score": final_score,
+        "final_score": final_score,
+        "score_notes": candidate_score.score_notes[:4],
+        "agent_summary": eval_result.summary[:240],
     }
+
+
+def _clean(items: list[str]) -> list[str]:
+    return [x.strip() for x in items if x and x.strip()]
