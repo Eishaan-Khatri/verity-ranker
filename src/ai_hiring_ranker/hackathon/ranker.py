@@ -22,8 +22,21 @@ def load_feature_cache(path: Path | str) -> list[dict[str, Any]]:
     return rows
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Null-safe float coercion. Treats missing key AND explicit None the same way."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _score_value(row: dict[str, Any]) -> float:
-    return float(row.get("final_score", row.get("base_score", 0.0)))
+    val = row.get("final_score")
+    if val is None:
+        val = row.get("base_score")
+    return _safe_float(val, 0.0)
 
 
 def _listwise_sort_key(row: dict[str, Any]) -> tuple:
@@ -35,12 +48,12 @@ def _listwise_sort_key(row: dict[str, Any]) -> tuple:
     dims = row.get("dimensions") or {}
     return (
         -_score_value(row),
-        -float(dims.get("proof_strength", 0.0)),
-        -float(dims.get("skill_fit", 0.0)),
-        -float(dims.get("seniority_match", 0.0)),
-        -float(dims.get("career_growth", 0.0)),
-        -float(dims.get("experience_depth", 0.0)),
-        -float(row.get("github_activity_score", 0.0)),
+        -_safe_float(dims.get("proof_strength")),
+        -_safe_float(dims.get("skill_fit")),
+        -_safe_float(dims.get("seniority_match")),
+        -_safe_float(dims.get("career_growth")),
+        -_safe_float(dims.get("experience_depth")),
+        -_safe_float(row.get("github_activity_score")),
         str(row.get("candidate_id", "")),
     )
 

@@ -45,6 +45,90 @@ lower-confidence orderings rather than precise distinctions.
 
 ## 3. Evaluation + Ablation Report (Layer 17)
 
-*TODO — not yet built. Will compare: (a) naive keyword-match baseline,
-(b) hybrid retrieval only, (c) full pipeline with guards + domain-transition
-penalty, on the same 100K pool, to demonstrate what each layer contributes.*
+## Section 3 — Ablation: What Each Layer Actually Does
+
+To isolate the contribution of each pipeline stage, we reconstructed 5
+progressively richer rankings from the same precompute cache — no new LLM
+calls, no re-running precompute — and measured how each layer's top-100
+composition changes (n=100,000 candidates, JD skill count=11).
+
+| Tier | Off-domain titles | Self-disclosed transitions | Avg stuffer risk |
+|---|---|---|---|
+| Keyword-only | 0 | 0 | 0.050 |
+| + Skill graph | 10 | 17 | 0.042 |
+| + Agent rubric | 54 | 90 | 0.007 |
+| + Retrieval blend | 55 | 91 | 0.007 |
+| + Guards (full pipeline) | **0** | **0** | 0.024 |
+
+**Reading this table:** keyword-only matching is narrow — it can't surface
+off-domain candidates at all, but it's the most easily gamed (highest
+stuffer-risk at 0.050). As richer signals are layered in, the ranker starts
+surfacing nominally well-matched but actually off-domain or recently-
+transitioned candidates (54 off-domain titles, 90 self-disclosed transitions
+in the top-100 by Tier 4). The final guard layer (Tier 5) explicitly catches
+and removes these — collapsing both counts back to 0, while keeping
+stuffer-risk less than half of the keyword-only baseline (0.024 vs 0.050).
+
+This is direct, measurable evidence that the guards are not cosmetic: without
+them, roughly half of the top-100 would be wrong-fit candidates.
+
+### Keyword-only vs. full-pipeline divergence
+
+- **Jaccard overlap (top-100): 0.0** — zero candidates in common between the
+  naive keyword-matched top-100 and the full-pipeline top-100.
+- **Kendall's tau: -0.753** — a strong, statistically robust *negative*
+  correlation between keyword-only score and full-pipeline rank, not noise.
+
+The three largest demotions from keyword-only top-10 illustrate why:
+
+| Candidate | Title (resume) | Headline | Full-pipeline rank |
+|---|---|---|---|
+| Deepak Pandey (CAND_0000406) | DevOps Engineer | "Backend systems & APIs" | 42,193 |
+| Myra Sen (CAND_0000703) | Mobile Developer | "Full-stack development" | 31,929 |
+| Deepak Mehta (CAND_0000570) | DevOps Engineer | "Backend systems & APIs" | 28,804 |
+
+All three carry generic, buzzword-dense headlines that overlap heavily with
+JD keywords, despite their actual titles sitting in a different domain
+(DevOps/Mobile vs. the target role). Keyword-matching rewards the headline
+overlap; the full pipeline correctly identifies the domain mismatch and
+demotes them by 28,000–42,000 ranks.
+
+## Section 4 — Robustness Testing
+
+Beyond accuracy metrics, we stress-tested the pipeline for production-grade
+reliability across three dimensions.
+
+### 4.1 Determinism
+
+`rank.py` was run twice against the identical JD and cache (no re-precompute,
+no new LLM calls):
+
+- **Ranking order: identical** across both runs.
+- **Top-100 set: identical** across both runs.
+- Runtime: 5.8–8.1s for 100,000 candidates → top 100 (well within the
+  hackathon's offline ranking budget; variance attributable to disk I/O,
+  not non-determinism in the ranking logic).
+
+This confirms the offline ranking stage (Layer 11 listwise tie-break +
+submission sort) is fully deterministic given a fixed precompute cache —
+re-running the submission script will always reproduce the same leaderboard
+result.
+
+### 4.2 Score sanity at scale
+
+All 100,000 cached `final_score` values were checked for `NaN`, `None`, or
+out-of-range (outside [0, 100]) values. **Zero anomalies found.**
+
+### 4.3 Malformed-data injection (and a real bug found + fixed)
+
+Four synthetic corrupted candidates were injected into the feature cache to
+simulate partial precompute failures (e.g. a malformed Gemini response):
+
+| Injected candidate | Corruption |
+|---|---|
+| CAND_BROKEN_001 | Empty `dimensions` dict |
+| CAND_BROKEN_002 | Empty `matched_required` / `matched_preferred` |
+| CAND_BROKEN_003 | `final_score` explicitly `None` |
+| CAND_BROKEN_004 | Missing `honeypot_risk` / `stuffer_risk` fields |
+
+The first run **crashed** the ranker:

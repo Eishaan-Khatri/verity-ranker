@@ -28,10 +28,10 @@ OFF_DOMAIN_TITLE_RE = re.compile(r"\b(Backend|Analytics|Data)\s+Engineer\b", re.
 
 def load_jd_skill_count(jd_cache_path: Path) -> int:
     jd = json.loads(jd_cache_path.read_text(encoding="utf-8"))
-    req = jd.get("all_required_skill_names", []) or []
-    pref = jd.get("all_preferred_skill_names", []) or []
-    return max(1, len(req) + len(pref))
-
+    req = jd.get("required_skills", []) or []
+    pref = jd.get("preferred_skills", []) or []
+    names = {s.get("skill", "").strip().lower() for s in (req + pref) if s.get("skill")}
+    return max(1, len(names))
 
 def load_cache(cache_path: Path) -> list[dict[str, Any]]:
     rows = []

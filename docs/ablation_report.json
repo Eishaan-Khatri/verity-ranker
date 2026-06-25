@@ -9,10 +9,10 @@
       "avg_stuffer_risk": 0.05
     },
     "skill_graph": {
-      "off_domain_title_count": 2,
-      "self_disclosed_transition_count": 3,
+      "off_domain_title_count": 10,
+      "self_disclosed_transition_count": 17,
       "avg_honeypot_risk": 0.0,
-      "avg_stuffer_risk": 0.061
+      "avg_stuffer_risk": 0.042
     },
     "agent_rubric": {
       "off_domain_title_count": 54,
@@ -34,7 +34,7 @@
     }
   },
   "consecutive_overlap": {
-    "keyword_only -> skill_graph": 0.005,
+    "keyword_only -> skill_graph": 0.031,
     "skill_graph -> agent_rubric": 0.0,
     "agent_rubric -> retrieval_blend": 0.835,
     "retrieval_blend -> full_pipeline": 0.042
