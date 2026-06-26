@@ -152,6 +152,56 @@ def recruiter_response_rate(record: dict[str, Any]) -> Optional[float]:
         rate = rate / 100.0
     return max(0.0, min(1.0, rate))
 
+def profile_completeness(record: dict[str, Any]) -> Optional[float]:
+    """Extract profile completeness score (0-1 range)."""
+    signals = record.get("redrob_signals", {}) or {}
+    score = signals.get("profile_completeness_score")
+    if score is None:
+        return None
+    try:
+        val = float(score)
+        return val / 100.0 if val > 1.0 else val
+    except (TypeError, ValueError):
+        return None
+
+
+def skill_assessment_scores(record: dict[str, Any]) -> dict[str, float]:
+    """Extract per-skill assessment scores from redrob_signals."""
+    signals = record.get("redrob_signals", {}) or {}
+    assessments = signals.get("skill_assessment_scores")
+    if not isinstance(assessments, dict):
+        return {}
+    # Convert to floats, normalize 0-1
+    result = {}
+    for skill, score in assessments.items():
+        try:
+            val = float(score)
+            result[skill] = val / 100.0 if val > 1.0 else val
+        except (TypeError, ValueError):
+            pass
+    return result
+
+
+def interview_completion_rate(record: dict[str, Any]) -> Optional[float]:
+    """Extract interview completion rate."""
+    signals = record.get("redrob_signals", {}) or {}
+    rate = signals.get("interview_completion_rate")
+    if rate is None:
+        return None
+    try:
+        val = float(rate)
+        return max(0.0, min(1.0, val))
+    except (TypeError, ValueError):
+        return None
+
+
+def verified_contact(record: dict[str, Any]) -> bool:
+    """Check if email AND phone are verified."""
+    signals = record.get("redrob_signals", {}) or {}
+    email_verified = signals.get("verified_email")
+    phone_verified = signals.get("verified_phone")
+    return bool(email_verified) and bool(phone_verified)
+
 
 def iter_candidates(path: Path | str) -> Iterator[tuple[int, dict[str, Any]]]:
     path = Path(path)

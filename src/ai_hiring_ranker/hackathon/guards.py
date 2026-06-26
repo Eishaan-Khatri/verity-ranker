@@ -44,14 +44,25 @@ def buzzword_density(text: str) -> float:
 
 
 def honeypot_risk(record: dict[str, Any]) -> tuple[float, list[str]]:
-    """Return risk score 0-1 and human-readable flags."""
+    """Return risk score 0-1 and human-readable flags.
+    
+    Combines heuristic checks with behavioral signal contradictions.
+    """
+    from .dataset import (
+        profile_completeness,
+        skill_assessment_scores,
+        interview_completion_rate,
+        verified_contact,
+    )
+    
     text = resume_text(record)
     title = job_title(record)
     skills = skills_list(record)
     years = years_experience(record)
     flags: list[str] = []
     risk = 0.0
-
+    
+    # ─── Heuristic checks ───────────────────────────────────────
     lowered = text.lower()
     for phrase in IMPOSSIBLE_PHRASES:
         if phrase in lowered:
@@ -85,6 +96,29 @@ def honeypot_risk(record: dict[str, Any]) -> tuple[float, list[str]]:
             flags.append("claims GitHub activity but github_activity_score is near zero")
     except (TypeError, ValueError):
         pass
+
+    # ─── Behavioral signal contradictions ───────────────────────
+    completeness = profile_completeness(record)
+    if completeness is not None and len(skills) > 10 and completeness < 0.3:
+        risk += 0.25
+        flags.append(f"Skill overload ({len(skills)} skills) with incomplete profile ({completeness*100:.0f}%)")
+
+    assessments = skill_assessment_scores(record)
+    if assessments and len(skills) > 5:
+        avg_score = sum(assessments.values()) / len(assessments) if assessments else 0.0
+        if avg_score < 0.2:  # < 20% on assessments despite skill claims
+            risk += 0.30
+            flags.append(f"Skill claims vs assessment mismatch (avg score {avg_score*100:.0f}%)")
+
+    interview_rate = interview_completion_rate(record)
+    if interview_rate is not None and interview_rate < 0.2:
+        risk += 0.20
+        flags.append(f"Low interview completion rate ({interview_rate*100:.0f}%)")
+
+    verified = verified_contact(record)
+    if not verified:
+        risk += 0.15
+        flags.append("No contact verification (email/phone unverified)")
 
     return min(1.0, risk), flags
 
