@@ -40,109 +40,39 @@ So instead of just shipping a ranked list, PRISM ships:
 
 ---
 
-## Headline Result
+## Verity Ranker V1
 
-| Metric | Value | What it means |
-|---|---|---|
-| Jaccard overlap (keyword-only top-100 vs. full-pipeline top-100) | **0.0** | Zero candidates in common — the two approaches disagree completely |
-| Kendall's tau (keyword-only score vs. full-pipeline rank) | **-0.753** | Strong, statistically robust *negative* correlation — not noise |
+V1 is the minimum working candidate ranking pipeline.
 
-In other words: candidates that a naive keyword matcher would rank #1–10 are, on inspection, frequently keyword-stuffers with mismatched actual domain experience. PRISM's full pipeline demotes them by **28,000–42,000 ranks**.
+It is intentionally limited. It does not claim full agentic evaluation, proof-of-work verification, graph reasoning, or fairness guarantees. Its job is to prove that the project can:
 
-```
-Deepak Pandey (CAND_0000406) — DevOps Engineer, headline "Backend systems & APIs" → rank 42,193
-Myra Sen      (CAND_0000703) — Mobile Developer, headline "Full-stack development" → rank 31,929
-Deepak Mehta  (CAND_0000570) — DevOps Engineer, headline "Backend systems & APIs" → rank 28,804
-```
+- read a job description
+- read candidate profiles/resumes
+- extract basic role and candidate signals
+- rank candidates with a deterministic scoring rubric
+- produce a valid ranked output file
+- generate a small audit report for review
 
-All three had headlines dense with JD-matching buzzwords despite their actual titles sitting in a different domain. The full pipeline catches the mismatch; keyword matching does not.
+## Why V1 Exists
 
----
+Most advanced hiring-ranker ideas fail if the basic output file is wrong. V1 creates the clean baseline before adding claim verification, graph retrieval, multi-agent scoring, and reranking.
 
-## Architecture
+## Run Sample
 
-PRISM is a **two-script design**, split deliberately so the expensive part (LLM calls) and the fast part (final ranking) never touch the same execution path:
+From this folder:
 
-```mermaid
-flowchart TD
-    A[JD raw text] --> B[precompute.py — offline, one-time]
-    C[100K candidate profiles] --> B
-    B --> B1[JD Profile Extraction<br/>Gemini/Groq → structured JDProfile]
-    B --> B2[Candidate Feature Extraction<br/>per-candidate, 100K rows]
-    B2 --> B3[Retrieval Blend<br/>FAISS semantic + BM25 keyword]
-    B2 --> B4[Six-Dimension Rubric Scoring<br/>LLM-judged + rule-based]
-    B2 --> B5[Guard Signals<br/>honeypot / stuffer / transition / off-domain]
-    B3 --> D[(cache/candidate_features.jsonl<br/>cache/jd_profile.json)]
-    B4 --> D
-    B5 --> D
-    D --> E[rank.py — online, CPU-only, ~5-8s]
-    E --> E1[Layer 11: Listwise re-rank<br/>shortlist pool, rule-based tie-break]
-    E1 --> E2[Final sort: rounded score desc<br/>+ candidate_id tie-break]
-    E2 --> F[Top-100 submission CSV<br/>candidate_id, rank, score, reasoning]
+```bash
+python run_v1.py run --jd data/sample/jd.txt --candidates data/sample/candidates --output outputs/final/ranked_output.csv --report outputs/final/audit_report.json
+python run_v1.py validate --file outputs/final/ranked_output.csv
 ```
 
-**Why this split matters:** `rank.py` never makes a network call. Given a fixed precompute cache, it is fully deterministic and reproducible — verified by running it twice and diffing the output (see [Robustness Testing](#robustness-testing)).
+## Web Demo
 
-### Pipeline stages in detail
+V1 includes a Streamlit app because GitHub Pages cannot run the Python ranker server-side. Streamlit Community Cloud can deploy this repository from GitHub and run the existing Python pipeline.
 
-| Stage | Script | What happens |
-|---|---|---|
-| JD parsing | `precompute.py` | Raw JD text → structured `JDProfile` (job_title, seniority, domain, required/preferred skills, hidden expectations, ambiguity flags) via Gemini/Groq |
-| Candidate feature extraction | `precompute.py` | Per-candidate: keyword matches, retrieval scores, six rubric dimensions, guard signals — written once to `cache/candidate_features.jsonl` |
-| Retrieval | `precompute.py` | FAISS (semantic similarity) blended with BM25 (keyword/lexical) — this is the "retrieval_blend" tier in the ablation study |
-| Rubric scoring | `precompute.py` | Six weighted dimensions (below), producing `final_score` (0–100) |
-| Guard checks | `precompute.py` | Honeypot risk, stuffer risk, self-disclosed transition multiplier, off-domain title detection |
-| Listwise re-rank | `rank.py` (Layer 11) | Rule-based tie-break over a shortlist pool (default 300), using dimension scores + GitHub activity as tiebreakers |
-| Submission ordering | `rank.py` | Final deterministic sort: rounded score desc, candidate_id asc on ties (validator-compliant) |
-| Reasoning generation | `rank.py` | Fact-grounded, per-candidate explanation for each of the top 100 |
-| Evaluation/Ablation | `ablation_report.py` (Layer 17) | Reconstructs 5 tiers from the *same* cache (no new LLM calls) to measure each layer's marginal contribution |
+Run locally:
 
----
-
-## The Six-Dimension Rubric
-
-Each candidate's `final_score` is built from a weighted combination of:
-
-| Dimension | Weight | What it captures |
-|---|---|---|
-| Skill fit | 0.30 | Overlap and depth of required/preferred skills |
-| Experience depth | 0.20 | Years and seniority of relevant experience |
-| Seniority match | 0.15 | Alignment between candidate level and JD seniority |
-| Domain match | 0.15 | Actual domain/industry alignment (not just title keywords) |
-| Career growth | 0.10 | Trajectory — progression, not stagnation |
-| Proof strength | 0.10 | Evidence quality (verifiable projects, GitHub activity, etc.) |
-
----
-
-## Guard Layers (Anti-Gaming)
-
-PRISM explicitly detects and demotes three failure modes that keyword-matching is blind to:
-
-- **Stuffer risk** — headlines/profiles dense with JD keywords but with weak actual evidence
-- **Honeypot risk** — <!-- TODO: describe what this guard specifically detects -->
-- **Self-disclosed transition multiplier** — penalizes/flags candidates mid-career-transition where claimed fit may not reflect actual readiness
-- **Off-domain title detection** — regex/rule-based check (e.g. flags `Backend|Analytics|Data Engineer` titles against the JD's actual domain)
-
-The [ablation study](#evaluation--ablation-study) below is the direct proof these guards work — without them, **54–55 off-domain candidates and 90–91 self-disclosed transitions** would appear in the top-100. With guards active, both numbers go to **zero**.
-
----
-
-## Tech Stack
-
-- **LLM reasoning:** Gemini, Groq
-- **Retrieval:** FAISS (semantic), BM25 (keyword)
-- **Validation/schemas:** Pydantic
-- **Dashboard:** Streamlit
-- **Language:** Python
-
----
-
----
-
-## Setup
-
-```powershell
-# TODO: confirm exact dependency install step
+```bash
 pip install -r requirements.txt
 
 # TODO: list required environment variables (API keys etc.)
