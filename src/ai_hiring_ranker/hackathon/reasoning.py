@@ -22,7 +22,7 @@ def _extract_key_jd_signals(row: dict[str, Any], job_title: str) -> dict[str, st
     matched_req = row.get("matched_required", []) or []
     matched_pref = row.get("matched_preferred", []) or []
     
-    # Check for production/shipping language
+    
     production_keywords = {
         "shipped", "deployed", "production", "live users", "scaled",
         "ranking", "search", "recommendation", "information retrieval",

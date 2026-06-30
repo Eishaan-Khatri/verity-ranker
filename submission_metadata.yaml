@@ -5,7 +5,7 @@ project_name: "PRISM: Proof driven Ranking and Intelligent Selection Model"
 primary_contact:
   name: "Arushi Tripathi"
   email: "arrushi111@gmail.com"
-  phone: "+91-" 
+  phone: "+91-9897531678" 
 
 # ─── REPOSITORY & DEPLOYMENT ──────────────────────────────────────────
 repository:
@@ -19,16 +19,16 @@ sandbox:
 # ─── TEAM MEMBERS (Required) ───────────────────────────────────────────
 team_members:
   - name: "Arushi Tripathi"
-    email: "arushi.tripathi@rgipt.ac.in"
+    email: "arrushi111@gmail.com"
     role: "Lead Engineer, Architecture & Guard Layers"
     
   - name: "Eishaan Khatri"
-    email: "eishaan.khatri@rgipt.ac.in"
+    email: ""
     role: "Multi-Agent Scoring & Evaluation"
     
   - name: "Naman Shrestha"
-    email: "naman.shrestha@rgipt.ac.in"
-    role: "Research & Validation"
+    email: ""
+    role: "PPT and Presentations"
 
 # ─── SUBMISSION FILES ──────────────────────────────────────────────────
 submission:
