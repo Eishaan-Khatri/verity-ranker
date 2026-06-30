@@ -12,22 +12,20 @@ repository:
   url: "https://github.com/Eishaan-Khatri/verity-ranker"
   type: "public"
   
-sandbox:
-  url: "https://huggingface.co/spaces/YOUR_USERNAME/verity-ranker"  
-  platform: "HuggingFace Spaces"
+sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/verity-ranker"
   
 # ─── TEAM MEMBERS (Required) ───────────────────────────────────────────
 team_members:
   - name: "Arushi Tripathi"
     email: "arrushi111@gmail.com"
-    role: "Lead Engineer, Architecture & Guard Layers"
+    role: "Architecture & Guard Layers"
     
   - name: "Eishaan Khatri"
-    email: ""
+    email: "eishaankhatri@gmail.com"
     role: "Multi-Agent Scoring & Evaluation"
     
   - name: "Naman Shrestha"
-    email: ""
+    email: "naman.shrestha2005@gmail.com"
     role: "PPT and Presentations"
 
 # ─── SUBMISSION FILES ──────────────────────────────────────────────────
@@ -103,13 +101,23 @@ ai_tools_declared:
     usage: "Default offline extraction, scoring, reasoning in rank.py"
     used_in_rank_script: true
 
-# ─── COMPUTE ENVIRONMENT (Required) ────────────────────────────────────
-compute_environment:
+# ─── COMPUTE ENVIRONMENT & DECLARATIONS (Required) ─────────────────────
+compute:
   os: "Windows 11"
   python_version: "3.11"
-  ram: "16 GB"
-  processor: "Intel i7 (CPU-only)"
-  summary: "Windows 11, Python 3.11, 16GB RAM, CPU-only, no GPU"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true
+
+ai_usage_summary: |
+  Claude used for code structure and documentation. Groq used for optional JD intelligence parsing 
+  in precompute.py. The ranking script uses offline, rule-based extraction.
 
 # ─── ARCHITECTURE & APPROACH ──────────────────────────────────────────
 architecture:

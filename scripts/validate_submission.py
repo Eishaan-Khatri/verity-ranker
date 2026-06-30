@@ -15,9 +15,31 @@ DATA_ROW_START = 2
 EXPECTED_DATA_ROWS = 100
 
 
-def validate_submission(csv_path):
+def validate_submission(csv_path, candidates_path=None):
     errors = []
     path = Path(csv_path)
+
+    valid_ids = None
+    if candidates_path:
+        cand_path = Path(candidates_path)
+        if cand_path.exists():
+            import json
+            valid_ids = set()
+            try:
+                with open(cand_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if not line.strip(): continue
+                        try:
+                            data = json.loads(line)
+                            if "candidate_id" in data:
+                                valid_ids.add(data["candidate_id"])
+                        except json.JSONDecodeError:
+                            pass
+            except Exception as e:
+                errors.append(f"Warning: Could not read candidates file: {e}")
+        else:
+            errors.append(f"Warning: Candidates file not found at {cand_path}")
+
 
     if path.suffix.lower() != ".csv":
         errors.append("Filename must use a .csv extension.")
@@ -84,6 +106,8 @@ def validate_submission(csv_path):
             errors.append(f"Row {row_num}: candidate_id is required.")
         elif not CANDIDATE_ID_PATTERN.match(cid):
             errors.append(f"Row {row_num}: candidate_id must be CAND_XXXXXXX (7 digits).")
+        elif valid_ids is not None and cid not in valid_ids:
+            errors.append(f"Row {row_num}: candidate_id '{cid}' not found in candidates file.")
         elif cid in seen_ids:
             errors.append(f"Row {row_num}: duplicate candidate_id '{cid}'.")
         else:
@@ -137,11 +161,13 @@ def validate_submission(csv_path):
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python validate_submission.py <participant_id>.csv")
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(description="Validate submission CSV")
+    parser.add_argument("csv_path", help="Path to submission CSV")
+    parser.add_argument("--candidates", default="candidates.jsonl", help="Path to candidates.jsonl to validate IDs")
+    args = parser.parse_args()
 
-    errors = validate_submission(sys.argv[1])
+    errors = validate_submission(args.csv_path, candidates_path=args.candidates)
     if errors:
         print(f"Validation failed ({len(errors)} issue(s)):\n")
         for e in errors:

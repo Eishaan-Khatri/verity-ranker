@@ -736,7 +736,6 @@ def build_features(
         "response_rate": response_rate,
         "engagement_multiplier": engagement,
         "transition_multiplier": transition_mult,
-    
         "open_to_work": open_to_work,
         "notice_period_days": notice_days,
         "preferred_work_mode": work_mode,
@@ -756,7 +755,7 @@ def build_features(
     
         "disqualifiers": disqualifier_flags,
         "disqualifier_multiplier": disqualifier_mult,
-        
+
         "honeypot_risk": round(honeypot, 4),
         "stuffer_risk": round(stuffer, 4),
         "honeypot_flags": honeypot_flags,
