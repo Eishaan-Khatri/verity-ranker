@@ -605,7 +605,7 @@ def render_sidebar() -> bool:
             unsafe_allow_html=True,
         )
         spectrum_rule(3)
-        st.markdown("### Precomputed Submission Viewer\n\nViewing results from `submission/ranked_output.csv` and `cache/candidate_features.jsonl`.")
+        st.markdown("### Precomputed Submission Viewer\n\nViewing results from `submission/ranked_output.csv` and `submission/selected_features.jsonl`.")
         st.info("The pipeline is now running in Viewer mode for the pre-calculated Hackathon submission.")
         st.divider()
         run_btn = st.button("Run PRISM", type="primary", use_container_width=True)
@@ -618,7 +618,7 @@ def load_precomputed_results() -> Optional[dict]:
     import csv, json
     
     csv_path = ROOT / "submission" / "ranked_output.csv"
-    jsonl_path = ROOT / "cache" / "candidate_features.jsonl"
+    jsonl_path = ROOT / "submission" / "selected_features.jsonl"
     
     if not csv_path.exists() or not jsonl_path.exists():
         return None
@@ -1076,7 +1076,7 @@ def main() -> None:
         with st.spinner("Loading precomputed results..."):
             st.session_state.pipeline_result = load_precomputed_results()
             if st.session_state.pipeline_result is None:
-                st.error("Error: Could not load submission/ranked_output.csv or cache/candidate_features.jsonl. Ensure files exist.")
+                st.error("Error: Could not load submission/ranked_output.csv or submission/selected_features.jsonl. Ensure files exist.")
                 st.stop()
 
     result = st.session_state.pipeline_result
