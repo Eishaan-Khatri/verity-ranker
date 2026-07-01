@@ -150,6 +150,7 @@ Root cause: a `.get(key, default)` pattern that only falls back when a key is *m
 
 - **Arushi Tripathi** ([@ArrushiTripathi2429](https://github.com/ArrushiTripathi2429)) — Architecture, guard layers, robustness testing, sandbox integration
 - **Eishaan Khatri** ([@Eishaan-Khatri](https://github.com/Eishaan-Khatri)) — Multi-agent scoring, claim verification, evaluation
+- **Naman Shrestha** - PPT And Presentations
 
 ---
 
