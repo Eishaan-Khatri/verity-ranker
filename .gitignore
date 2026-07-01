@@ -30,4 +30,7 @@ cache/
 cache_test/
 outputs/hackathon_cache_test/
 
-outputs/*.csv
+outputs/*.csvcache/
+submission/ranked_output.csv
+__pycache__/
+*.pyc

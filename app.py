@@ -591,45 +591,7 @@ def render_roster_card(card: dict, ledger_entry: Optional[dict], expanded: bool 
 
 # ── Sidebar / input ──────────────────────────────────────────────────────────
 
-DEMO_JD = (
-    "We are hiring a Backend Engineer with 3+ years of experience in Python, "
-    "AWS, and building production APIs. Preferred: Docker, Kubernetes, "
-    "PostgreSQL, FastAPI. The ideal candidate has shipped production systems "
-    "at scale and can work independently."
-)
-DEMO_CANDIDATES = [
-    ("DEMO_001", "Backend Engineer, 5 years experience. Built and scaled FastAPI "
-     "services on AWS (EC2, RDS, Lambda) serving 2M+ requests/day. Proficient in "
-     "Python, Docker, Kubernetes, PostgreSQL. Open source contributor."),
-    ("DEMO_002", "Frontend Developer, 2 years experience with React and "
-     "TypeScript. Some exposure to Node.js APIs. Limited backend/cloud experience."),
-    ("DEMO_003", "DevOps engineer, 6 years, manages infrastructure, not "
-     "application development. Backend systems & APIs. AWS AWS AWS Python "
-     "Python Docker Docker Kubernetes Kubernetes."),
-    ("DEMO_004", "Senior Backend Engineer, 8 years. Led a team building "
-     "Python/FastAPI microservices on AWS, with PostgreSQL and Kubernetes in "
-     "production. Speaks at conferences about distributed systems."),
-]
-
-
-def parse_pasted_candidates(text: str) -> list[tuple[str, str]]:
-    """Blocks separated by a line of '---'. Optional '# Name' first line per block."""
-    blocks = [b.strip() for b in text.split("---") if b.strip()]
-    out = []
-    for i, b in enumerate(blocks, start=1):
-        lines = b.splitlines()
-        cid = f"C{i:03d}"
-        body = b
-        if lines and lines[0].strip().startswith("#"):
-            label = lines[0].strip().lstrip("#").strip()
-            if label:
-                cid = label
-            body = "\n".join(lines[1:]).strip()
-        out.append((cid, body))
-    return out
-
-
-def render_sidebar() -> tuple:
+def render_sidebar() -> None:
     with st.sidebar:
         st.markdown(
             f"<div style='text-align:center;padding:.4rem 0 1rem'>"
@@ -643,91 +605,113 @@ def render_sidebar() -> tuple:
             unsafe_allow_html=True,
         )
         spectrum_rule(3)
-
-        mode = st.radio("Input", ["Built-in demo", "Paste your own"], label_visibility="collapsed")
-
-        jd_text = DEMO_JD
-        candidate_texts = DEMO_CANDIDATES
-
-        if mode == "Built-in demo":
-            st.markdown(
-                "<div style='font-family:Source Serif 4,serif;font-size:.82rem;color:var(--ink-muted);"
-                "margin:.4rem 0 .8rem'>4 synthetic candidates, including one keyword-stuffer — "
-                "useful for showing the guard layers in action.</div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            jd_text = st.text_area("Job description", placeholder="Paste the full job description here…", height=150)
-            cand_raw = st.text_area(
-                "Candidates",
-                placeholder="# Optional Name\nResume text for candidate 1...\n---\n# Another Name\nResume text for candidate 2...",
-                height=220,
-                help="Separate each candidate with a line containing only ---. Optional '# Name' as the first line of a block.",
-            )
-            files = st.file_uploader("Or upload .txt / .md resumes", type=["txt", "md"], accept_multiple_files=True)
-            if files:
-                candidate_texts = [(Path(f.name).stem, f.getvalue().decode("utf-8", errors="ignore")) for f in files]
-            elif cand_raw.strip():
-                candidate_texts = parse_pasted_candidates(cand_raw)
-            else:
-                candidate_texts = []
-
-        st.divider()
-        section_header("Pipeline options")
-        force_fallback = not st.toggle(
-            "Use LLM (requires API key)", value=False,
-            help="When off, the pipeline runs fully offline with rule-based fallbacks.",
-        )
-        shortlist_k = st.slider("Retrieval shortlist size", 5, 50, 10, 5)
-        stab_runs = st.slider("Stability test runs", 3, 10, 3, 1)
-
-        st.divider()
-        run_btn = st.button("Run pipeline", type="primary", use_container_width=True)
-
-    return jd_text, candidate_texts, force_fallback, shortlist_k, stab_runs, run_btn
+        st.markdown("### Precomputed Submission Viewer\n\nViewing results from `submission/ranked_output.csv` and `cache/candidate_features.jsonl`.")
+        st.info("The pipeline is now running in Viewer mode for the pre-calculated Hackathon submission.")
 
 
 # ── Pipeline runner ───────────────────────────────────────────────────────────
 
-def _load_json(path: Optional[str]) -> Optional[dict]:
-    if not path:
+def load_precomputed_results() -> Optional[dict]:
+    import csv, json
+    
+    csv_path = ROOT / "submission" / "ranked_output.csv"
+    jsonl_path = ROOT / "cache" / "candidate_features.jsonl"
+    
+    if not csv_path.exists() or not jsonl_path.exists():
         return None
-    p = Path(path)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
-
-
-def run_pipeline(jd_text: str, candidate_texts: list[tuple[str, str]], force_fallback: bool, k: int, stability_runs: int) -> dict:
-    from ai_hiring_ranker.evaluation import run_pipeline_from_texts
-
-    result = run_pipeline_from_texts(
-        jd_text=jd_text,
-        candidate_texts=candidate_texts,
-        output_dir=str(ROOT / "outputs"),
-        force_fallback=force_fallback,
-        k=k,
-        stability_runs=stability_runs,
-    )
-    manifest = result.to_manifest_dict()
-    files = result.manifest.to_dict()
+        
+    ranked = []
+    cids = set()
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            ranked.append(row)
+            cids.add(row["candidate_id"])
+            
+    features_map = {}
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip(): continue
+            try:
+                data = json.loads(line)
+                cid = data.get("candidate_id")
+                if cid in cids:
+                    features_map[cid] = data
+            except:
+                pass
+                
+    candidates = []
+    for i, row in enumerate(ranked):
+        cid = row["candidate_id"]
+        feat = features_map.get(cid, {})
+        
+        try:
+            score = float(row["score"])
+        except ValueError:
+            score = 0.0
+            
+        if score >= 80: label = "exceptional"
+        elif score >= 65: label = "strong"
+        elif score >= 50: label = "moderate"
+        elif score >= 35: label = "weak"
+        else: label = "poor"
+        
+        gap = None
+        if i + 1 < len(ranked):
+            try:
+                next_score = float(ranked[i+1]["score"])
+                gap = round(score - next_score, 2)
+            except ValueError:
+                pass
+                
+        dims = feat.get("dimensions", {})
+        
+        cand = {
+            "candidate_id": cid,
+            "candidate_name": feat.get("candidate_name") or cid,
+            "rank": int(row["rank"]) if row.get("rank") else i+1,
+            "final_score": score,
+            "score_label": label,
+            "rank_confidence": "high",
+            "skill_fit": dims.get("skill_fit", 0),
+            "experience_depth": dims.get("experience_depth", 0),
+            "seniority_match": dims.get("seniority_match", 0),
+            "domain_match": dims.get("domain_match", 0),
+            "career_growth": dims.get("career_growth", 0),
+            "proof_strength": dims.get("proof_strength", 0),
+            "verified_claims": len(feat.get("verified_skills", [])),
+            "unverified_claims": 0,
+            "verified_skills": feat.get("verified_skills", []),
+            "strengths": feat.get("strengths", []),
+            "risks": feat.get("risks", []),
+            "summary": feat.get("agent_summary", ""),
+            "why_above_next": row.get("reasoning", ""),
+            "score_gap_to_next": gap,
+            "interview_questions": [],
+        }
+        candidates.append(cand)
+        
     return {
-        "manifest": manifest,
-        "files": files,
-        "report": _load_json(files.get("report_json")),
-        "audit": _load_json(files.get("audit_json")),
-        "ledger": _load_json(files.get("ledger_json")),
+        "manifest": {
+            "run_id": "offline-cache",
+            "job_title": "Senior AI Engineer (Offline Submission)",
+            "candidate_count": len(candidates),
+            "duration_s": 0.0,
+            "warnings": [],
+        },
+        "report": {"candidates": candidates},
+        "audit": {},
+        "ledger": {},
+        "files": {}
     }
 
 
 def _ledger_map(ledger: Optional[dict]) -> dict[str, dict]:
-    if not ledger:
-        return {}
-    return {c["candidate_id"]: c for c in ledger.get("candidates", [])}
+    return {}
 
 
 def _stability_map(audit: Optional[dict]) -> dict[str, dict]:
-    if not audit:
-        return {}
-    return {row["candidate_id"]: row for row in audit.get("candidate_stability", [])}
+    return {}
 
 
 # ── Tab: Overview ────────────────────────────────────────────────────────────
@@ -1080,33 +1064,15 @@ def main() -> None:
     )
     spectrum_rule(6)
 
-    jd_text, candidate_texts, force_fallback, shortlist_k, stab_runs, run_btn = render_sidebar()
+    render_sidebar()
 
-    if "pipeline_result" not in st.session_state:
-        st.session_state.pipeline_result = None
-
-    if run_btn:
-        if not jd_text.strip():
-            st.error("Paste a job description first.")
-            st.stop()
-        if not candidate_texts:
-            st.error("Add at least one candidate (paste, upload, or switch to Built-in demo).")
-            st.stop()
-        try:
-            with st.spinner("Running the pipeline…"):
-                st.session_state.pipeline_result = run_pipeline(jd_text, candidate_texts, force_fallback, shortlist_k, stab_runs)
-            st.success("Pipeline complete.")
-        except Exception as exc:
-            st.error(f"Pipeline failed: {exc}")
-            st.stop()
-
-    result = st.session_state.pipeline_result
+    result = load_precomputed_results()
     if result is None:
         st.markdown(
             "<div class='prism-card' style='text-align:center;padding:2.6rem 1.5rem'>"
-            "<div style='font-family:Space Grotesk,sans-serif;font-size:1.15rem;font-weight:700;color:var(--ink)'>Nothing to refract yet</div>"
+            "<div style='font-family:Space Grotesk,sans-serif;font-size:1.15rem;font-weight:700;color:var(--ink)'>Files missing</div>"
             "<div style='font-family:Source Serif 4,serif;font-size:.88rem;color:var(--ink-muted);margin-top:.5rem'>"
-            "Choose the built-in demo or paste your own data, then click <b>Run pipeline</b> in the sidebar.</div></div>",
+            "Ensure submission/ranked_output.csv and cache/candidate_features.jsonl exist.</div></div>",
             unsafe_allow_html=True,
         )
         return
